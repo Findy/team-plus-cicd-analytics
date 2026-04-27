@@ -1,0 +1,197 @@
+name: "Findy Team+ CI Analytics"
+description: "Send CI workflow and job execution results to Findy Team+ for development performance analytics"
+
+branding:
+  icon: "bar-chart-2"
+  color: "blue"
+
+inputs:
+  organization-id:
+    description: "Findy Team+ organization ID"
+    required: true
+  api-token:
+    description: "Findy Team+ API token"
+    required: true
+  status:
+    description: "Workflow execution result status (success, failure, cancelled)"
+    required: true
+  github-token:
+    description: "GitHub token for fetching workflow run data"
+    required: true
+  include-jobs:
+    description: "Whether to include job-level detail data (true/false)"
+    required: false
+    default: "true"
+  job-timeout:
+    description: "Timeout in seconds for fetching job data"
+    required: false
+    default: "5"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Report workflow result to Findy Team+
+      shell: bash
+      env:
+        API_TOKEN: ${{ inputs.api-token }}
+        ORGANIZATION_ID: ${{ inputs.organization-id }}
+        STATUS: ${{ inputs.status }}
+        GH_TOKEN: ${{ inputs.github-token }}
+        INCLUDE_JOBS: ${{ inputs.include-jobs }}
+        JOB_TIMEOUT: ${{ inputs.job-timeout }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        GITHUB_RUN_ID: ${{ github.run_id }}
+        GITHUB_WORKFLOW_NAME: ${{ github.workflow }}
+        GITHUB_SERVER_URL: ${{ github.server_url }}
+      run: |
+        set -euo pipefail
+
+        API_ENDPOINT="https://api.findy-team.io/api/webhooks/workflows"
+
+        # Helper to report failures without blocking the consumer CI.
+        # Failure of analytics delivery should not break the consumer workflow,
+        # but visibility is preserved via warning annotations and the Run Summary.
+        run_link="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+        report_failure() {
+          local reason="$1"
+          local detail="$2"
+          echo "::warning::Findy Team+ CI Analytics: ${reason} (non-blocking)"
+          {
+            echo "## ⚠️ Findy Team+ CI Analytics: Send Failed"
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Reason | ${reason} |"
+            if [ -n "${detail}" ]; then
+              echo "| Detail | \`${detail}\` |"
+            fi
+            echo "| Endpoint | \`${API_ENDPOINT}\` |"
+            echo "| Workflow | \`${GITHUB_WORKFLOW_NAME}\` |"
+            echo "| Run | [${GITHUB_RUN_ID}](${run_link}) |"
+            echo ""
+            echo "_Analytics data may be missing for this run (CI itself continues)._"
+          } >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+        }
+
+        # Validate status input
+        if [ "${STATUS}" != "success" ] && [ "${STATUS}" != "failure" ] && [ "${STATUS}" != "cancelled" ]; then
+          report_failure "Invalid status '${STATUS}'" "Must be one of: success, failure, cancelled"
+          exit 0
+        fi
+
+        # Validate job-timeout input
+        if ! [[ "${JOB_TIMEOUT}" =~ ^[0-9]+$ ]] || [ "${JOB_TIMEOUT}" -lt 1 ] || [ "${JOB_TIMEOUT}" -gt 60 ]; then
+          report_failure "Invalid job-timeout '${JOB_TIMEOUT}'" "Must be an integer between 1 and 60"
+          exit 0
+        fi
+
+        # Validate include-jobs input
+        if [ "${INCLUDE_JOBS}" != "true" ] && [ "${INCLUDE_JOBS}" != "false" ]; then
+          report_failure "Invalid include-jobs '${INCLUDE_JOBS}'" "Must be 'true' or 'false'"
+          exit 0
+        fi
+
+        # Fetch workflow data
+        if ! WORKFLOW_DATA=$(curl -sSf -H "Authorization: token ${GH_TOKEN}" \
+          "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"); then
+          report_failure "Failed to fetch workflow data from GitHub API" ""
+          exit 0
+        fi
+
+        START_AT=$(echo "${WORKFLOW_DATA}" | jq -r '.run_started_at')
+        END_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+        if [ -z "${START_AT}" ] || [ "${START_AT}" = "null" ]; then
+          report_failure "Failed to get workflow start time" ""
+          exit 0
+        fi
+
+        PAYLOAD=$(jq -n \
+          --arg org "${ORGANIZATION_ID}" \
+          --arg repo "${GITHUB_REPOSITORY}" \
+          --arg workflow "${GITHUB_WORKFLOW_NAME}" \
+          --argjson run_id "${GITHUB_RUN_ID}" \
+          --arg url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+          --arg status "${STATUS}" \
+          --arg start_at "${START_AT}" \
+          --arg end_at "${END_AT}" \
+          '{
+            organization_name: $org,
+            repo_name: $repo,
+            workflow_name: $workflow,
+            run_id: $run_id,
+            url: $url,
+            status: $status,
+            start_at: $start_at,
+            end_at: $end_at
+          }')
+
+        # Fetch job data (optional)
+        if [ "${INCLUDE_JOBS}" = "true" ]; then
+          ALL_JOBS="[]"
+          PAGE=1
+
+          while true; do
+            if ! JOBS_DATA=$(timeout "${JOB_TIMEOUT}" curl -sSf -H "Authorization: token ${GH_TOKEN}" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?per_page=100&page=${PAGE}"); then
+              echo "::warning::Failed to fetch job data (page ${PAGE})"
+              break
+            fi
+
+            # Parse job data
+            # Exclude jobs where completed_at/started_at is null
+            if ! PAGE_JOBS=$(echo "${JOBS_DATA}" | jq -c '[
+              .jobs[] |
+              select(.completed_at != null and .completed_at != "") |
+              select(.started_at != null and .started_at != "") |
+              select(.conclusion != null) |
+              {
+                name: .name,
+                status: (
+                  if .conclusion == "success" then "success"
+                  elif .conclusion == "failure" then "failure"
+                  elif .conclusion == "cancelled" then "cancelled"
+                  elif .conclusion == "skipped" then "skipped"
+                  else "failure"
+                  end
+                ),
+                start_at: .started_at,
+                end_at: .completed_at
+              }
+            ]' 2>/dev/null) || [ -z "${PAGE_JOBS}" ]; then
+              echo "::warning::Failed to parse job data on page ${PAGE}"
+              break
+            fi
+
+            ALL_JOBS=$(echo "${ALL_JOBS}" "${PAGE_JOBS}" | jq -sc '.[0] + .[1]')
+
+            TOTAL_COUNT=$(echo "${JOBS_DATA}" | jq '.total_count // 0')
+            FETCHED=$(echo "${ALL_JOBS}" | jq 'length')
+            if [ "${FETCHED}" -ge "${TOTAL_COUNT}" ] || [ "$(echo "${JOBS_DATA}" | jq '.jobs | length')" -lt 100 ]; then
+              break
+            fi
+
+            PAGE=$((PAGE + 1))
+          done
+
+          JOB_COUNT=$(echo "${ALL_JOBS}" | jq 'length' 2>/dev/null || echo "0")
+
+          if [ "${JOB_COUNT}" -gt 0 ]; then
+            PAYLOAD=$(echo "${PAYLOAD}" | jq --argjson jobs "${ALL_JOBS}" '. + {jobs: $jobs}')
+          fi
+        fi
+
+        # Send data to Findy Team+ API
+        HTTP_CODE=$(curl -sS -X POST "${API_ENDPOINT}" \
+          -H "Content-Type: application/json" \
+          -H "Authorization: Bearer ${API_TOKEN}" \
+          -d "${PAYLOAD}" \
+          -w "%{http_code}" \
+          -o /dev/null)
+
+        if [ "${HTTP_CODE}" = "200" ] || [ "${HTTP_CODE}" = "201" ] || [ "${HTTP_CODE}" = "204" ]; then
+          echo "::notice::Successfully sent CI analytics data to Findy Team+"
+        else
+          report_failure "Failed to send CI analytics data to Findy Team+" "HTTP ${HTTP_CODE}"
+          exit 0
+        fi
