@@ -19,7 +19,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Install yamllint
-        run: pip install yamllint==1.38.0
+        run: pip install -r requirements.txt
       - name: Run yamllint
         run: yamllint -s action.yml
 
