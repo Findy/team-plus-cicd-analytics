@@ -14,17 +14,12 @@ jobs:
     name: YAML Lint
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    permissions:
-      contents: read
-      id-token: write # Takumi Guard bot-id (OIDC)
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
       - name: Setup Takumi Guard
         uses: flatt-security/setup-takumi-guard-pypi@733047c120b6377fa05fb77f714df8d8cd3a41a9 # v1.0.1
-        with:
-          bot-id: ${{ secrets.TAKUMI_GUARD_BOT_ID }}
       - name: Install yamllint
         run: pip install -r requirements.txt
       - name: Run yamllint
