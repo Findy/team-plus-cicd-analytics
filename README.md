@@ -130,6 +130,7 @@ When using the default `${{ github.token }}` for `github-token`, these permissio
 | Field | Description |
 |-------|-------------|
 | `organization_name` | Findy Team+ organization ID |
+| `schema_version` | Payload schema version (currently `2`) |
 | `repo_name` | Repository name (`owner/repo` format) |
 | `workflow_name` | Workflow name |
 | `run_id` | Workflow run ID |
@@ -149,8 +150,15 @@ When `include-jobs: true` (default), the following data is included for each com
 | `status` | Job status (`success`, `failure`, `cancelled`, `skipped`) |
 | `start_at` | Job start time |
 | `end_at` | Job end time |
+| `job_id` | GitHub job ID (jobs API `.id`) |
+| `run_attempt` | Job run attempt number |
+| `runner_id` | Runner ID (`null` if unavailable) |
+| `runner_name` | Runner name (`null` if unavailable) |
+| `runner_group_id` | Runner group ID (`null` if unavailable) |
+| `runner_group_name` | Runner group name (`null` if unavailable) |
+| `labels` | Labels the job requested (equivalent to `runs-on`; `null` if unavailable) |
 
-> **Note**: The currently running report job itself is excluded. Only completed jobs are sent.
+> **Note**: The currently running report job itself is excluded. Only completed jobs are sent. Runner fields (`runner_id` / `runner_name` / `runner_group_id` / `runner_group_name`) may be `null` when the runner information is not exposed by the GitHub API (e.g. skipped jobs). `labels` is normally returned as an array (possibly empty), but may be `null` if the field is absent from the API response.
 
 ## Contributing
 

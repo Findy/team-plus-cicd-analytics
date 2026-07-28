@@ -117,6 +117,7 @@ runs:
           --arg end_at "${END_AT}" \
           '{
             organization_name: $org,
+            schema_version: 2,
             repo_name: $repo,
             workflow_name: $workflow,
             run_id: $run_id,
@@ -140,6 +141,9 @@ runs:
 
             # Parse job data
             # Exclude jobs where completed_at/started_at is null
+            # Runner fields (runner_id / runner_name / runner_group_id / runner_group_name / labels)
+            # and job_id / run_attempt are passed through as-is; missing keys become null,
+            # so jobs without runner info still send successfully.
             if ! PAGE_JOBS=$(echo "${JOBS_DATA}" | jq -c '[
               .jobs[] |
               select(.completed_at != null and .completed_at != "") |
@@ -156,7 +160,14 @@ runs:
                   end
                 ),
                 start_at: .started_at,
-                end_at: .completed_at
+                end_at: .completed_at,
+                job_id: .id,
+                run_attempt: .run_attempt,
+                runner_id: .runner_id,
+                runner_name: .runner_name,
+                runner_group_id: .runner_group_id,
+                runner_group_name: .runner_group_name,
+                labels: .labels
               }
             ]' 2>/dev/null) || [ -z "${PAGE_JOBS}" ]; then
               echo "::warning::Failed to parse job data on page ${PAGE}"
