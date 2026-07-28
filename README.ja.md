@@ -130,6 +130,7 @@ permissions:
 | フィールド | 説明 |
 |-----------|------|
 | `organization_name` | Findy Team+の組織ID |
+| `schema_version` | Payloadスキーマのバージョン（現在は `2`） |
 | `repo_name` | リポジトリ名（`owner/repo`形式） |
 | `workflow_name` | ワークフロー名 |
 | `run_id` | ワークフロー実行ID |
@@ -149,8 +150,15 @@ permissions:
 | `status` | ジョブのステータス (`success`, `failure`, `cancelled`, `skipped`) |
 | `start_at` | ジョブ開始時刻 |
 | `end_at` | ジョブ終了時刻 |
+| `job_id` | GitHubのジョブID（jobs APIの `.id`） |
+| `run_attempt` | ジョブの実行試行回数 |
+| `runner_id` | ランナーID（取得できない場合は `null`） |
+| `runner_name` | ランナー名（取得できない場合は `null`） |
+| `runner_group_id` | ランナーグループID（取得できない場合は `null`） |
+| `runner_group_name` | ランナーグループ名（取得できない場合は `null`） |
+| `labels` | ジョブが要求したランナーラベル配列（`runs-on` 相当。取得できない場合は `null`） |
 
-> **注意**: 現在実行中のレポートジョブ自身は含まれません。完了したジョブのみが送信されます。
+> **注意**: 現在実行中のレポートジョブ自身は含まれません。完了したジョブのみが送信されます。ランナー系フィールド（`runner_id` / `runner_name` / `runner_group_id` / `runner_group_name`）は GitHub API がランナー情報を返さない場合（スキップされたジョブなど）に `null` になります。`labels` は通常空配列で返りますが、API 応答に含まれない場合は `null` になります。
 
 ## 貢献
 
