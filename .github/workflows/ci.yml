@@ -19,7 +19,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Setup Takumi Guard
-        uses: flatt-security/setup-takumi-guard-pypi@733047c120b6377fa05fb77f714df8d8cd3a41a9 # v1.0.1
+        uses: flatt-security/setup-takumi-guard-pypi@bac24f8a97255d96a277f60de6906154ce0be096 # v1.1.0
       - name: Install yamllint
         run: pip install -r requirements.txt
       - name: Run yamllint
