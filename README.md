@@ -158,7 +158,7 @@ When `include-jobs: true` (default), the following data is included for each com
 | `runner_group_name` | Runner group name (`null` if unavailable) |
 | `labels` | Labels the job requested (equivalent to `runs-on`; `null` if unavailable) |
 
-> **Note**: The currently running report job itself is excluded. Only completed jobs are sent. Runner fields (`runner_id` / `runner_name` / `runner_group_id` / `runner_group_name`) may be `null` when the runner information is not exposed by the GitHub API (e.g. skipped jobs). `labels` is normally returned as an array (possibly empty), but may be `null` if the field is absent from the API response.
+> **Note**: The currently running report job itself is excluded. Only completed jobs are sent. Runner fields (`runner_id` / `runner_name` / `runner_group_id` / `runner_group_name`) may be `null` when the runner information is not exposed by the GitHub API (e.g. skipped jobs). `labels` is normally returned as an array (possibly empty), but may be `null` if the field is absent from the API response. When the GitHub API returns a `completed_at` earlier than `started_at` (e.g. skipped jobs), `end_at` is clamped to `started_at` before sending.
 
 ## Contributing
 

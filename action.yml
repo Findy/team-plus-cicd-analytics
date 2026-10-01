@@ -160,7 +160,7 @@ runs:
                   end
                 ),
                 start_at: .started_at,
-                end_at: .completed_at,
+                end_at: (if .completed_at < .started_at then .started_at else .completed_at end),
                 job_id: .id,
                 run_attempt: .run_attempt,
                 runner_id: .runner_id,
