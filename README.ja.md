@@ -158,7 +158,7 @@ permissions:
 | `runner_group_name` | ランナーグループ名（取得できない場合は `null`） |
 | `labels` | ジョブが要求したランナーラベル配列（`runs-on` 相当。取得できない場合は `null`） |
 
-> **注意**: 現在実行中のレポートジョブ自身は含まれません。完了したジョブのみが送信されます。ランナー系フィールド（`runner_id` / `runner_name` / `runner_group_id` / `runner_group_name`）は GitHub API がランナー情報を返さない場合（スキップされたジョブなど）に `null` になります。`labels` は通常空配列で返りますが、API 応答に含まれない場合は `null` になります。
+> **注意**: 現在実行中のレポートジョブ自身は含まれません。完了したジョブのみが送信されます。ランナー系フィールド（`runner_id` / `runner_name` / `runner_group_id` / `runner_group_name`）は GitHub API がランナー情報を返さない場合（スキップされたジョブなど）に `null` になります。`labels` は通常空配列で返りますが、API 応答に含まれない場合は `null` になります。GitHub API が `started_at` より前の `completed_at` を返す場合（スキップされたジョブなど）、`end_at` は `started_at` にクランプして送信されます。
 
 ## 貢献
 
